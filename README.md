@@ -1,147 +1,135 @@
-# greenguard
-Autonomous Arduino plant care controller: climate-triggered vent servo, low-water buzzer alert via ultrasonic sensing, and interlocked pump control. Simulated in Wokwi.
-https://wokwi.com/projects/478065756491385857
+# 🌱 GreenGuard — Autonomous Plant Care Controller
 
-    #include <DHT.h>
-    #include <Servo.h>
-    
-    #define DHTPIN 2
-    #define SERVO_PIN 6
-    #define PUMP_LED 7
-    #define BUZZER 8
-    #define TRIG 9
-    #define ECHO 10
-    #define SOIL A1
-    
-    DHT dht(DHTPIN, DHT22);
-    Servo vent;
+An Arduino UNO system that takes care of a plant's environment on its own: it
+opens a **vent servo** when it gets too hot, waters via a **pump** when soil is
+dry, and sounds a **buzzer alarm** when the water tank runs low — with the pump
+hard-interlocked so it never runs dry. All sensors, actuators, and telemetry
+run on non-blocking `millis()` scheduling.
 
-    const float TEMP_OPEN = 28.0;
-    const float TEMP_CLOSE = 26.0;
-    const int TANK_LOW_CM = 20;
-    const int SOIL_DRY = 30;
-    const int SOIL_WET = 45;
-    
-    float temp = 0, tankCm = 0;
-    int soil = 0;
-    bool ventOpen = false, pumpOn = false, tankLow = false, buzzState = false;
-    unsigned long lastDht = 0, lastFast = 0, lastBeep = 0, lastPrint = 0;
+**▶️ Try it live on Wokwi (no hardware required):** https://wokwi.com/projects/478065756491385857
 
-    float readDistanceCm() {
-      digitalWrite(TRIG, LOW);  delayMicroseconds(2);
-      digitalWrite(TRIG, HIGH); delayMicroseconds(10);
-      digitalWrite(TRIG, LOW);
-      long us = pulseIn(ECHO, HIGH, 30000);
-      if (us == 0) return 400;          // no echo = treat as empty
-      return us * 0.034 / 2;
-    }
-    
-    void setup() {
-      Serial.begin(9600);
-      pinMode(TRIG, OUTPUT);
-      pinMode(ECHO, INPUT);
-      pinMode(PUMP_LED, OUTPUT);
-      pinMode(BUZZER, OUTPUT);
-      dht.begin();
-    vent.attach(SERVO_PIN);
-    vent.write(0);
-    Serial.println("ms,temp,tank_cm,soil,vent,pump,tank_low");
-    }
-    
-    void loop() {
-      unsigned long now = millis();
-    
-    // DHT22: every 2 s
-    if (now - lastDht >= 2000) {
-      lastDht = now;
-      float t = dht.readTemperature();
-      if (!isnan(t)) temp = t;
-    }
-  
-    // Fast sensors + control logic: every 500 ms
-    if (now - lastFast >= 500) {
-      lastFast = now;
-      tankCm = readDistanceCm();
-      tankLow = tankCm > TANK_LOW_CM;
-      soil = map(analogRead(SOIL), 0, 1023, 0, 100);
+## The Subsystems
 
-    // Vent with hysteresis
-    if (!ventOpen && temp >= TEMP_OPEN)      { ventOpen = true;  vent.write(90); }
-    else if (ventOpen && temp <= TEMP_CLOSE) { ventOpen = false; vent.write(0);  }
+| Subsystem | Sensor | Actuator | Behavior |
+|---|---|---|---|
+| 🌡️ Climate vent | DHT22 temperature | Servo on pin 6 | Opens (90°) at ≥ 28°C, closes at ≤ 26°C — hysteresis band |
+| 💧 Irrigation | Potentiometer as soil sensor (A1) | Blue LED as pump (pin 7) | Pump ON when soil < 30%, OFF above 45% — hysteresis band |
+| 🚨 Tank alarm | HC-SR04 ultrasonic on tank | Piezo buzzer (pin 8) | Beeps continuously when water < 20 cm from sensor |
+| 📋 Telemetry | all of the above | Serial Monitor | CSV status row every 5 s |
 
-    // Pump (never runs with an empty tank)
-    if (tankLow) pumpOn = false;
-    else if (!pumpOn && soil < SOIL_DRY) pumpOn = true;
-    else if (pumpOn && soil > SOIL_WET)  pumpOn = false;
-    digitalWrite(PUMP_LED, pumpOn);
-    }
-  
-    // Non-blocking beep when tank is low
-    if (tankLow) {
-      if (now - lastBeep >= 400) {
-        lastBeep = now;
-        buzzState = !buzzState;
-        if (buzzState) tone(BUZZER, 1000); else noTone(BUZZER);
-      }
-    } else {
-      noTone(BUZZER);
-      buzzState = false;
-    }
+## Safety: The Pump Interlock
 
-      // CSV log: every 5 s
-      if (now - lastPrint >= 5000) {
-        lastPrint = now;
-        Serial.print(now);     Serial.print(',');
-        Serial.print(temp);    Serial.print(',');
-        Serial.print(tankCm);  Serial.print(',');
-        Serial.print(soil);    Serial.print(',');
-        Serial.print(ventOpen);Serial.print(',');
-        Serial.print(pumpOn);  Serial.print(',');
-        Serial.println(tankLow);
-      }
-    }
+The pump is **never allowed to run when the tank is low.** The tank check runs
+first in the control logic:
 
-The code below is for the diagram.json of Green Guard
+```
+if (tankLow)        pumpOn = false;          // hard interlock wins
+else if (!pumpOn && soil < 30) pumpOn = true;
+else if (pumpOn && soil > 45)  pumpOn = false;
+```
 
-    {
-      "version": 1,
-      "author": "Plant Care Controller",
-      "editor": "wokwi",
-      "parts": [
-        { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
-        { "type": "wokwi-dht22", "id": "dht1", "top": -160, "left": 320, "attrs": { "temperature": "24", "humidity": "50" } },
-        { "type": "wokwi-hc-sr04", "id": "ultra1", "top": -160, "left": -220, "attrs": { "distance": "8" } },
-        { "type": "wokwi-servo", "id": "servo1", "top": 260, "left": 0, "attrs": {} },
-        { "type": "wokwi-buzzer", "id": "bz1", "top": 250, "left": 300, "attrs": {} },
-        { "type": "wokwi-led", "id": "led1", "top": 180, "left": 440, "attrs": { "color": "blue" } },
-        { "type": "wokwi-resistor", "id": "r1", "top": 150, "left": 330, "attrs": { "value": "220" } },
-        { "type": "wokwi-potentiometer", "id": "pot1", "top": 250, "left": -220, "attrs": {} }
-      ],
-      "connections": [
-        ["uno:5V", "dht1:VCC", "red", []],
-        ["uno:GND.1", "dht1:GND", "black", []],
-        ["uno:2", "dht1:SDA", "green", []],
+Dry soil + empty tank = pump stays off, and the buzzer tells you why. This
+prevents a dry-running pump (which in real hardware means burnt-out pumps).
 
-    ["uno:5V", "ultra1:VCC", "red", []],
-    ["uno:GND.1", "ultra1:GND", "black", []],
-    ["uno:9", "ultra1:TRIG", "orange", []],
-    ["uno:10", "ultra1:ECHO", "purple", []],
+## How It Works
 
-    ["uno:5V", "servo1:V+", "red", []],
-    ["uno:GND.3", "servo1:GND", "black", []],
-    ["uno:6", "servo1:PWM", "orange", []],
+The `loop()` runs four independent `millis()` timers at different rates — slow
+sensors get polled less often, fast ones stay responsive:
 
-    ["uno:8", "bz1:2", "green", []],
-    ["uno:GND.3", "bz1:1", "black", []],
+| Task | Rate | What it does |
+|---|---|---|
+| DHT22 read | every 2 s | Temperature (rejected if `isnan` — keeps last good value) |
+| Ultrasonic + control | every 500 ms | Tank distance, soil %, vent & pump state machines |
+| Buzzer | every 400 ms toggling | Non-blocking beep while tank is low |
+| CSV log | every 5 s | `ms,temp,tank_cm,soil,vent,pump,tank_low` over Serial |
 
-    ["uno:7", "r1:1", "blue", []],
-    ["r1:2", "led1:A", "blue", []],
-    ["led1:C", "uno:GND.1", "black", []],
+### Two hysteresis loops
+- **Vent:** opens ≥ 28°C, closes ≤ 26°C — a 2°C band stops the servo from
+  jittering around the threshold.
+- **Pump:** ON below 30% soil, OFF above 45% — forces the soil to genuinely
+  re-wet before the pump stops.
 
-    ["uno:5V", "pot1:VCC", "red", []],
-    ["uno:GND.3", "pot1:GND", "black", []],
-    ["uno:A1", "pot1:SIG", "yellow", []]
-      ],
-      "dependencies": {}
-    }
-      
+### Ultrasonic water level
+The HC-SR04 measures the distance from the sensor (top of tank) down to the
+water surface: **larger distance = less water.** Distance > 20 cm → low tank.
+A missing echo (timeout) is treated as empty, fail-safe.
+
+## Hardware
+
+| Part | Role |
+|---|---|
+| Arduino UNO | Microcontroller board |
+| DHT22 | Temperature for vent control (pin 2) |
+| HC-SR04 ultrasonic | Water tank level (TRIG 9, ECHO 10) |
+| Potentiometer | Stands in for capacitive soil sensor (A1) |
+| SG90 servo | Vent actuator (PWM pin 6) |
+| Piezo buzzer | Low-water alarm (pin 8) |
+| Blue LED + 220Ω | Pump indicator (pin 7) |
+
+## Wiring
+
+| Part | Arduino UNO Pins |
+|---|---|
+| DHT22 | 5V / GND / D2 |
+| HC-SR04 | 5V / GND / TRIG D9 / ECHO D10 |
+| Servo | 5V / GND / PWM D6 |
+| Buzzer | D8 / GND |
+| Pump LED (via 220Ω) | D7 → resistor → LED → GND |
+| Soil pot | 5V / GND / A1 |
+
+The exact layout is defined in [`diagram.json`](diagram.json) — open the Wokwi
+link above to see the wired circuit.
+
+## Files
+
+- `sketch.ino` — the Arduino program (4 concurrent tasks, 2 hysteresis loops, pump interlock, CSV telemetry)
+- `diagram.json` — Wokwi circuit definition (board, parts, wiring)
+
+## Sample CSV Output
+
+```
+ms,temp,tank_cm,soil,vent,pump,tank_low
+5021,24.00,8.00,52,0,0,0
+10033,27.50,22.00,25,0,1,1
+```
+
+## How to Run
+
+**Option 1 — Wokwi (easiest):** click the link above, press ▶️ Play, open the
+Serial Monitor at 9600 baud. Things to try:
+- Push DHT22 temp ≥ 28°C → servo swings to 90° (vent opens)
+- Turn the soil pot below 30% → blue pump LED lights
+- Drag HC-SR04 distance past 20 cm → buzzer beeps and the pump force-stops
+
+**Option 2 — Real hardware:** wire the circuit as above, flash the sketch with
+the Arduino IDE, open Serial Monitor at 9600 baud.
+
+## Concepts Demonstrated
+
+- Cooperative multi-tasking with `millis()` (4 tasks, 4 different rates)
+- Hysteresis applied to *both* control loops
+- Fail-safe sensor handling (`isnan`, echo timeout → treated as empty)
+- Hardware interlocks (actuator blocked by safety condition)
+- Ultrasonic distance sensing (`pulseIn`, µs → cm conversion)
+- PWM actuator control (servo)
+- Non-blocking audio (toggle-based beeping with `tone`/`noTone`)
+- Structured telemetry (CSV with a header row)
+
+## Planned Improvements
+
+- [ ] LCD status display (like my [weather-station-datalogger](https://github.com/AkashBGBhat/weather-station-datalogger))
+- [ ] Water level % instead of raw cm on the LCD
+- [ ] Auto-refill / valve control for the tank
+- [ ] EEPROM config for thresholds
+- [ ] Real relay + pump hardware build
+- [ ] ESP32 + Wi-Fi with dashboard & alerts
+
+## Built With
+
+- Arduino UNO (C++ / Arduino framework)
+- [Wokwi](https://wokwi.com) — browser-based simulation
+- Adafruit DHT + Servo libraries
+
+## Author
+
+**Akash Bhat** — [github.com/AkashBGBhat](https://github.com/AkashBGBhat)

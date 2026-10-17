@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "author": "Plant Care Controller",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -160, "left": 320, "attrs": { "temperature": "24", "humidity": "50" } },
+    { "type": "wokwi-hc-sr04", "id": "ultra1", "top": -160, "left": -220, "attrs": { "distance": "8" } },
+    { "type": "wokwi-servo", "id": "servo1", "top": 260, "left": 0, "attrs": {} },
+    { "type": "wokwi-buzzer", "id": "bz1", "top": 250, "left": 300, "attrs": {} },
+    { "type": "wokwi-led", "id": "led1", "top": 180, "left": 440, "attrs": { "color": "blue" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 150, "left": 330, "attrs": { "value": "220" } },
+    { "type": "wokwi-potentiometer", "id": "pot1", "top": 250, "left": -220, "attrs": {} }
+  ],
+  "connections": [
+    ["uno:5V", "dht1:VCC", "red", []],
+    ["uno:GND.1", "dht1:GND", "black", []],
+    ["uno:2", "dht1:SDA", "green", []],
+
+    ["uno:5V", "ultra1:VCC", "red", []],
+    ["uno:GND.1", "ultra1:GND", "black", []],
+    ["uno:9", "ultra1:TRIG", "orange", []],
+    ["uno:10", "ultra1:ECHO", "purple", []],
+
+    ["uno:5V", "servo1:V+", "red", []],
+    ["uno:GND.3", "servo1:GND", "black", []],
+    ["uno:6", "servo1:PWM", "orange", []],
+
+    ["uno:8", "bz1:2", "green", []],
+    ["uno:GND.3", "bz1:1", "black", []],
+
+    ["uno:7", "r1:1", "blue", []],
+    ["r1:2", "led1:A", "blue", []],
+    ["led1:C", "uno:GND.1", "black", []],
+
+    ["uno:5V", "pot1:VCC", "red", []],
+    ["uno:GND.3", "pot1:GND", "black", []],
+    ["uno:A1", "pot1:SIG", "yellow", []]
+  ],
+  "dependencies": {}
+}
