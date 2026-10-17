@@ -22,7 +22,7 @@
     ["uno:9", "ultra1:TRIG", "orange", []],
     ["uno:10", "ultra1:ECHO", "purple", []],
 
-    ["uno:5V", "servo1:V+ ", "red", []],
+    ["uno:5V", "servo1:V+", "red", []],
     ["uno:GND.3", "servo1:GND", "black", []],
     ["uno:6", "servo1:PWM", "orange", []],
 
